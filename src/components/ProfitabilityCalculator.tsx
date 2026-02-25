@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   BarChart,
   Bar,
@@ -9,66 +9,19 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-import { Plus, X, Info } from "lucide-react";
+import { Plus, X, Info, Loader2 } from "lucide-react";
 
 const EXCHANGE_RATE = 1100; // 1 USD = 1100 ARS
 
-const CAR_MODELS = [
-  {
-    id: "peugeot_208",
-    name: "Peugeot 208 Active",
-    priceUsd: 15000,
-    rentArs: 1020000,
-    maintenanceArs: 100000,
-    insuranceArs: 80000,
-    patentArs: 50000,
-  },
-  {
-    id: "renault_logan",
-    name: "Renault Logan",
-    priceUsd: 12000,
-    rentArs: 1440000,
-    maintenanceArs: 90000,
-    insuranceArs: 70000,
-    patentArs: 40000,
-  },
-  {
-    id: "toyota_corolla",
-    name: "Toyota Corolla",
-    priceUsd: 18000,
-    rentArs: 1360000,
-    maintenanceArs: 120000,
-    insuranceArs: 100000,
-    patentArs: 60000,
-  },
-  {
-    id: "vw_polo",
-    name: "VW Nuevo Polo MSI",
-    priceUsd: 14000,
-    rentArs: 1440000,
-    maintenanceArs: 95000,
-    insuranceArs: 85000,
-    patentArs: 55000,
-  },
-  {
-    id: "fiat_cronos",
-    name: "Fiat Cronos",
-    priceUsd: 13000,
-    rentArs: 1440000,
-    maintenanceArs: 85000,
-    insuranceArs: 75000,
-    patentArs: 45000,
-  },
-  {
-    id: "renault_kangoo",
-    name: "Renault Kangoo II Stepway",
-    priceUsd: 16000,
-    rentArs: 1520000,
-    maintenanceArs: 110000,
-    insuranceArs: 90000,
-    patentArs: 50000,
-  },
-];
+interface CarModel {
+  id: string;
+  name: string;
+  priceUsd: number;
+  rentArs: number;
+  maintenanceArs: number;
+  insuranceArs: number;
+  patentArs: number;
+}
 
 const formatCurrency = (value: number, currency: "ARS" | "USD" = "ARS") => {
   return new Intl.NumberFormat("es-AR", {
@@ -79,13 +32,35 @@ const formatCurrency = (value: number, currency: "ARS" | "USD" = "ARS") => {
 };
 
 export function ProfitabilityCalculator() {
-  const [selectedCar1, setSelectedCar1] = useState(CAR_MODELS[1].id);
+  const [carModels, setCarModels] = useState<CarModel[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCar1, setSelectedCar1] = useState<string>("");
   const [selectedCar2, setSelectedCar2] = useState<string | null>(null);
 
-  const car1 = CAR_MODELS.find((c) => c.id === selectedCar1);
-  const car2 = CAR_MODELS.find((c) => c.id === selectedCar2);
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        const response = await fetch('/api/rental-rates');
+        if (!response.ok) throw new Error('Failed to fetch rates');
+        const data = await response.json();
+        setCarModels(data);
+        if (data.length > 0) {
+          setSelectedCar1(data[1]?.id || data[0].id);
+        }
+      } catch (error) {
+        console.error('Error fetching car models:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
 
-  const calculateMetrics = (car: (typeof CAR_MODELS)[0]) => {
+    fetchRates();
+  }, []);
+
+  const car1 = carModels.find((c) => c.id === selectedCar1);
+  const car2 = carModels.find((c) => c.id === selectedCar2);
+
+  const calculateMetrics = (car: CarModel) => {
     const priceArs = car.priceUsd * EXCHANGE_RATE;
     const totalCostsArs = car.maintenanceArs + car.insuranceArs + car.patentArs;
     const netIncomeMonthlyArs = car.rentArs - totalCostsArs;
@@ -158,7 +133,7 @@ export function ProfitabilityCalculator() {
                   value={selectedCar1}
                   onChange={(e) => setSelectedCar1(e.target.value)}
                 >
-                  {CAR_MODELS.map((car) => (
+                  {carModels.map((car) => (
                     <option key={car.id} value={car.id}>
                       {car.name}
                     </option>
@@ -178,7 +153,7 @@ export function ProfitabilityCalculator() {
                       value={selectedCar2}
                       onChange={(e) => setSelectedCar2(e.target.value)}
                     >
-                      {CAR_MODELS.filter((c) => c.id !== selectedCar1).map(
+                      {carModels.filter((c) => c.id !== selectedCar1).map(
                         (car) => (
                           <option key={car.id} value={car.id}>
                             {car.name}
@@ -197,7 +172,7 @@ export function ProfitabilityCalculator() {
                   <button
                     onClick={() =>
                       setSelectedCar2(
-                        CAR_MODELS.find((c) => c.id !== selectedCar1)?.id ||
+                        carModels.find((c) => c.id !== selectedCar1)?.id ||
                           null,
                       )
                     }
