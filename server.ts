@@ -1,6 +1,19 @@
 import express from 'express';
 import { createServer as createViteServer } from 'vite';
 import Database from 'better-sqlite3';
+import bcrypt from 'bcryptjs';
+import jwt from 'jsonwebtoken';
+
+declare global {
+  namespace Express {
+    interface Request {
+      userId?: number;
+      userRole?: string;
+    }
+  }
+}
+
+const JWT_SECRET = process.env.JWT_SECRET || 'your_default_secret';
 
 const db = new Database('fleevest.db');
 
@@ -10,6 +23,7 @@ db.exec(`
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT,
     email TEXT UNIQUE,
+    password TEXT,
     role TEXT,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   );
@@ -34,6 +48,58 @@ db.exec(`
     image TEXT,
     available BOOLEAN,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS vehicles (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id INTEGER,
+    brand TEXT,
+    model TEXT,
+    year INTEGER,
+    plate TEXT,
+    status TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(owner_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS bookings (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    listing_id INTEGER,
+    driver_id INTEGER,
+    status TEXT,
+    start_date DATETIME,
+    end_date DATETIME,
+    total_price INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(driver_id) REFERENCES users(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS claims (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    booking_id INTEGER,
+    reporter_id INTEGER,
+    description TEXT,
+    status TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(booking_id) REFERENCES bookings(id)
+  );
+
+  CREATE TABLE IF NOT EXISTS market_prices (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    model TEXT,
+    year INTEGER,
+    average_price INTEGER,
+    source TEXT,
+    fetched_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  );
+
+  CREATE TABLE IF NOT EXISTS listings_sale (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    vehicle_id INTEGER,
+    price INTEGER,
+    description TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY(vehicle_id) REFERENCES vehicles(id)
   );
 `);
 
@@ -70,6 +136,105 @@ async function startServer() {
   app.use(express.json());
 
   // API Routes
+  app.post('/api/register', (req, res) => {
+    const { name, email, password, role } = req.body;
+
+    if (!name || !email || !password || !role) {
+      return res.status(400).json({ error: 'All fields are required' });
+    }
+
+    const hashedPassword = bcrypt.hashSync(password, 8);
+
+    try {
+      const stmt = db.prepare('INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)');
+      const info = stmt.run(name, email, hashedPassword, role);
+      res.status(201).json({ id: info.lastInsertRowid, name, email, role });
+    } catch (error: any) {
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE') {
+        return res.status(409).json({ error: 'Email already exists' });
+      }
+      console.error('Error registering user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  app.post('/api/login', (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+
+    try {
+      const stmt = db.prepare('SELECT * FROM users WHERE email = ?');
+      const user = stmt.get(email) as any;
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      const passwordIsValid = bcrypt.compareSync(password, user.password);
+
+      if (!passwordIsValid) {
+        return res.status(401).json({ error: 'Invalid password' });
+      }
+
+      const token = jwt.sign({ id: user.id, role: user.role }, JWT_SECRET, {
+        expiresIn: 86400 // 24 hours
+      });
+
+      res.status(200).json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        accessToken: token
+      });
+    } catch (error) {
+      console.error('Error logging in:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  const authJwt = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader) {
+      return res.status(403).json({ error: 'No token provided' });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    if (!token) {
+      return res.status(403).json({ error: 'No token provided' });
+    }
+
+    jwt.verify(token, JWT_SECRET, (err: any, decoded: any) => {
+      if (err) {
+        return res.status(401).json({ error: 'Unauthorized' });
+      }
+      req.userId = decoded.id;
+      req.userRole = decoded.role;
+      next();
+    });
+  };
+
+  app.get('/api/user', authJwt, (req, res) => {
+    try {
+      const stmt = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?');
+      const user = stmt.get(req.userId);
+
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      res.status(200).json(user);
+    } catch (error) {
+      console.error('Error fetching user:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
   app.get('/api/health', (req, res) => {
     res.json({ status: 'ok' });
   });

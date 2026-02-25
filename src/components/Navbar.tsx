@@ -1,16 +1,26 @@
 import React from 'react';
 import { Car, Menu, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import AuthService from '../services/auth.service';
 
 export function Navbar() {
   const [isOpen, setIsOpen] = React.useState(false);
+  const currentUser = AuthService.getCurrentUser();
+
+  const handleLogout = () => {
+    AuthService.logout();
+    window.location.reload();
+  };
 
   return (
     <nav className="bg-white border-b border-gray-100 sticky top-0 z-50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex items-center">
-            <Car className="h-8 w-8 text-indigo-600" />
-            <span className="ml-2 text-2xl font-bold text-gray-900 tracking-tight">Fleevest</span>
+            <Link to="/" className="flex items-center">
+              <Car className="h-8 w-8 text-indigo-600" />
+              <span className="ml-2 text-2xl font-bold text-gray-900 tracking-tight">Fleevest</span>
+            </Link>
           </div>
           
           <div className="hidden md:flex items-center space-x-8">
@@ -18,10 +28,19 @@ export function Navbar() {
             <a href="#marketplace" className="text-gray-600 hover:text-indigo-600 font-medium transition-colors">Marketplace</a>
             <a href="#como-funciona" className="text-gray-600 hover:text-indigo-600 font-medium transition-colors">Cómo Funciona</a>
             <div className="flex items-center space-x-4 ml-4 border-l pl-4 border-gray-200">
-              <button className="text-gray-600 hover:text-gray-900 font-medium">Ingresar</button>
-              <button className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors shadow-sm">
-                Publicar Auto
-              </button>
+              {currentUser ? (
+                <>
+                  <Link to="/dashboard" className="text-gray-600 hover:text-gray-900 font-medium">Dashboard</Link>
+                  <button onClick={handleLogout} className="text-gray-600 hover:text-gray-900 font-medium">Logout</button>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" className="text-gray-600 hover:text-gray-900 font-medium">Ingresar</Link>
+                  <Link to="/register" className="bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 transition-colors shadow-sm">
+                    Publicar Auto
+                  </Link>
+                </>
+              )}
             </div>
           </div>
 
@@ -44,10 +63,19 @@ export function Navbar() {
             <a href="#marketplace" className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 rounded-md">Marketplace</a>
             <a href="#como-funciona" className="block px-3 py-2 text-base font-medium text-gray-700 hover:text-indigo-600 hover:bg-gray-50 rounded-md">Cómo Funciona</a>
             <div className="mt-4 pt-4 border-t border-gray-100 flex flex-col space-y-2 px-3">
-              <button className="w-full text-left py-2 text-base font-medium text-gray-700 hover:text-indigo-600">Ingresar</button>
-              <button className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 text-center">
-                Publicar Auto
-              </button>
+              {currentUser ? (
+                <>
+                  <Link to="/dashboard" className="w-full text-left py-2 text-base font-medium text-gray-700 hover:text-indigo-600">Dashboard</Link>
+                  <button onClick={handleLogout} className="w-full text-left py-2 text-base font-medium text-gray-700 hover:text-indigo-600">Logout</button>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" className="w-full text-left py-2 text-base font-medium text-gray-700 hover:text-indigo-600">Ingresar</Link>
+                  <Link to="/register" className="w-full bg-indigo-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-indigo-700 text-center">
+                    Publicar Auto
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
